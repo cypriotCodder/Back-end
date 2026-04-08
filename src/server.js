@@ -1,13 +1,24 @@
 const dotenv = require("dotenv");
-const app = require("./app");
-
 dotenv.config();
 
-// Initialize database connection
+const app = require("./app");
+const initDB = require("./config/initDB");
+
+// Initialize database connection & tables
 require("./config/db");
 
 const PORT = process.env.PORT || 5003;
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}: http://localhost:${PORT}`);
-});
+const startServer = async () => {
+    try {
+        await initDB();
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}: http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        console.error("Failed to initialize database. Server not started.", err.message);
+        process.exit(1);
+    }
+};
+
+startServer();
