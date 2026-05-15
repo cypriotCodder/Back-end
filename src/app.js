@@ -2,8 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 
-const authRoutes = require("./routes/authRoutes");
-const groupRoutes = require("./routes/groupRoutes");
+const authRoutes    = require("./routes/authRoutes");
+const sessionRoutes = require("./routes/groupRoutes");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
@@ -26,8 +26,13 @@ const loginLimiter = rateLimit({
 
 // Routes
 app.use("/api/auth/login", loginLimiter);
-app.use("/api/auth", authRoutes);
-app.use("/api/groups", groupRoutes);
+app.use("/api/auth",     authRoutes);
+app.use("/api/sessions", sessionRoutes);
+
+// Health check
+app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Root route
 app.get("/", (req, res) => {

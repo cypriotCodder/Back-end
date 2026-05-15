@@ -1,16 +1,23 @@
 const express = require("express");
-const router = express.Router();
+const router  = express.Router();
 const { verifyToken } = require("../middleware/authMiddleware");
+const {
+    getSessions,
+    getSessionById,
+    createSession,
+    joinSession,
+    leaveSession,
+    deleteSession
+} = require("../controllers/groupController");
 
-// Protect all group routes (FR9)
-router.use(verifyToken);
+// ── Public routes (no token required) ────────────────────────────────────
+router.get("/",    getSessions);      // GET  /api/sessions
+router.get("/:id", getSessionById);   // GET  /api/sessions/:id
 
-// GET /api/groups
-router.get("/", (req, res) => {
-    res.json([
-        { id: 1, title: "COMP401 Study Group", course: "COMP401", members: 5 },
-        { id: 2, title: "Database Revision Group", course: "COMP301", members: 3 }
-    ]);
-});
+// ── Protected routes (JWT required) ──────────────────────────────────────
+router.post("/",              verifyToken, createSession);  // POST   /api/sessions
+router.post("/:id/join",      verifyToken, joinSession);    // POST   /api/sessions/:id/join
+router.delete("/:id/leave",   verifyToken, leaveSession);   // DELETE /api/sessions/:id/leave
+router.delete("/:id",         verifyToken, deleteSession);  // DELETE /api/sessions/:id
 
 module.exports = router;
