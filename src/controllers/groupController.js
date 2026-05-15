@@ -1,18 +1,21 @@
-const Joi = require("joi");
-const Session = require("../models/Group");
+const Joi     = require("joi");
+const Session  = require("../models/Group");
+const Location = require("../models/Location");
 
 // ── Validation schemas ─────────────────────────────────────────────────────
 
 const createSchema = Joi.object({
     tag:        Joi.string().max(50).required(),
     title:      Joi.string().max(200).required(),
-    location:   Joi.string().max(200).required(),
     time:       Joi.string().max(100).required(),
     about:      Joi.string().max(2000).optional().allow(""),
     totalSpots: Joi.number().integer().min(2).max(100).required(),
+    color:      Joi.string().max(20).optional(),
+    // Location fields (create a locations row automatically)
+    address:    Joi.string().max(255).required(),
+    placeName:  Joi.string().max(255).optional().allow("", null),
     lat:        Joi.number().min(-90).max(90).optional().allow(null),
-    lng:        Joi.number().min(-180).max(180).optional().allow(null),
-    color:      Joi.string().max(20).optional()
+    lng:        Joi.number().min(-180).max(180).optional().allow(null)
 });
 
 // ── GET /api/sessions ──────────────────────────────────────────────────────
@@ -41,7 +44,7 @@ const getSessionById = async (req, res, next) => {
 };
 
 // ── POST /api/sessions ────────────────────────────────────────────────────
-// Auth required. Creates a new session; host is the logged-in user.
+// Auth required. Creates a location record then the session.
 const createSession = async (req, res, next) => {
     try {
         const { error, value } = createSchema.validate(req.body);
@@ -49,7 +52,18 @@ const createSession = async (req, res, next) => {
             return res.status(400).json({ status: "error", message: error.details[0].message });
         }
 
-        const session = await Session.create(value, req.user.id);
+        const { tag, title, time, about, totalSpots, color,
+                address, placeName, lat, lng } = value;
+
+        // 1. Persist location first
+        const location = await Location.create({ address, placeName, lat, lng });
+
+        // 2. Create session referencing the new location
+        const session = await Session.create(
+            { tag, title, time, about, totalSpots, color, locationId: location.id },
+            req.user.id
+        );
+
         res.status(201).json({ status: "success", data: session });
     } catch (err) {
         next(err);

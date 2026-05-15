@@ -1,53 +1,59 @@
 const pool = require("../config/db");
 
 const Session = {
-    // ── List all sessions with host name and live attendee count ──────────────
+    // ── List all sessions with host name, location, and live attendee count ──
     async getAll() {
         const [rows] = await pool.execute(`
             SELECT
                 s.id,
                 s.tag,
                 s.title,
-                s.location,
                 s.time,
                 s.about,
                 s.total_spots,
-                s.lat,
-                s.lng,
                 s.color,
                 s.created_at,
-                u.id       AS host_id,
-                u.username AS host_name,
+                u.id          AS host_id,
+                u.username    AS host_name,
+                l.id          AS location_id,
+                l.address,
+                l.place_name,
+                l.lat,
+                l.lng,
                 (
                     SELECT COUNT(*) FROM session_attendees sa
                     WHERE sa.session_id = s.id
                 ) AS attendee_count
             FROM sessions s
-            JOIN users u ON u.id = s.host_id
+            JOIN users     u ON u.id = s.host_id
+            JOIN locations l ON l.id = s.location_id
             ORDER BY s.created_at DESC
         `);
         return rows;
     },
 
-    // ── Get a single session with its full attendees list ─────────────────────
+    // ── Get one session with its full attendees list ──────────────────────────
     async getById(id) {
         const [[session]] = await pool.execute(`
             SELECT
                 s.id,
                 s.tag,
                 s.title,
-                s.location,
                 s.time,
                 s.about,
                 s.total_spots,
-                s.lat,
-                s.lng,
                 s.color,
                 s.created_at,
-                u.id       AS host_id,
-                u.username AS host_name
+                u.id          AS host_id,
+                u.username    AS host_name,
+                l.id          AS location_id,
+                l.address,
+                l.place_name,
+                l.lat,
+                l.lng
             FROM sessions s
-            JOIN users u ON u.id = s.host_id
+            JOIN users     u ON u.id = s.host_id
+            JOIN locations l ON l.id = s.location_id
             WHERE s.id = ?
         `, [id]);
 
@@ -64,18 +70,18 @@ const Session = {
         return { ...session, attendees };
     },
 
-    // ── Create a new session (host is auto-added as the creator) ─────────────
-    async create({ tag, title, location, time, about, totalSpots, lat, lng, color }, hostId) {
+    // ── Create a new session (location_id must already exist) ─────────────────
+    async create({ tag, title, time, about, totalSpots, color, locationId }, hostId) {
         const [result] = await pool.execute(`
-            INSERT INTO sessions (tag, title, location, time, about, total_spots, lat, lng, color, host_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [tag, title, location, time, about || null, totalSpots || 6,
-            lat ?? null, lng ?? null, color || '#0f0f10', hostId]);
+            INSERT INTO sessions (tag, title, time, about, total_spots, color, host_id, location_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [tag, title, time, about || null, totalSpots || 6,
+            color || '#0f0f10', hostId, locationId]);
 
         return this.getById(result.insertId);
     },
 
-    // ── Join a session (insert into attendees) ────────────────────────────────
+    // ── Join a session ────────────────────────────────────────────────────────
     async join(sessionId, userId) {
         await pool.execute(`
             INSERT IGNORE INTO session_attendees (session_id, user_id)
@@ -91,16 +97,15 @@ const Session = {
         `, [sessionId, userId]);
     },
 
-    // ── Delete a session (only possible if requester is the host) ─────────────
+    // ── Delete a session — only the host can do this ──────────────────────────
     async delete(sessionId, hostId) {
         const [result] = await pool.execute(`
-            DELETE FROM sessions
-            WHERE id = ? AND host_id = ?
+            DELETE FROM sessions WHERE id = ? AND host_id = ?
         `, [sessionId, hostId]);
         return result.affectedRows > 0;
     },
 
-    // ── Check whether a user has already joined a session ────────────────────
+    // ── Check if a user has already joined ───────────────────────────────────
     async isJoined(sessionId, userId) {
         const [[row]] = await pool.execute(`
             SELECT 1 FROM session_attendees
@@ -110,7 +115,7 @@ const Session = {
         return !!row;
     },
 
-    // ── Count how many spots are still available ──────────────────────────────
+    // ── How many spots remain ─────────────────────────────────────────────────
     async spotsLeft(sessionId) {
         const [[session]] = await pool.execute(`
             SELECT total_spots FROM sessions WHERE id = ?

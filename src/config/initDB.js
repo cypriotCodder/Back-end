@@ -2,7 +2,7 @@ const pool = require("./db");
 
 const initDB = async () => {
     try {
-        // Users table
+        // 1. Users
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS users (
                 id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -13,32 +13,56 @@ const initDB = async () => {
             )
         `);
 
-        // Sessions table
+        // 2. Locations (must exist before sessions references it)
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS locations (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                address    VARCHAR(255) NOT NULL,
+                place_name VARCHAR(255),
+                lat        DECIMAL(9,6),
+                lng        DECIMAL(9,6),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // 3. Sessions (references users + locations)
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS sessions (
                 id          INT AUTO_INCREMENT PRIMARY KEY,
                 tag         VARCHAR(50)  NOT NULL,
                 title       VARCHAR(200) NOT NULL,
-                location    VARCHAR(200) NOT NULL,
                 time        VARCHAR(100) NOT NULL,
                 about       TEXT,
                 total_spots INT          NOT NULL DEFAULT 6,
-                lat         DECIMAL(9,6),
-                lng         DECIMAL(9,6),
                 color       VARCHAR(20)  DEFAULT '#0f0f10',
                 host_id     INT          NOT NULL,
+                location_id INT          NOT NULL,
                 created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (host_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY (host_id)     REFERENCES users(id)     ON DELETE CASCADE,
+                FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT
             )
         `);
 
-        // Attendees join table
+        // 4. RSVP / attendees join table (references users + sessions)
         await pool.execute(`
             CREATE TABLE IF NOT EXISTS session_attendees (
                 session_id INT NOT NULL,
                 user_id    INT NOT NULL,
                 joined_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (session_id, user_id),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
+            )
+        `);
+
+        // 5. Messages (references users + sessions)
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS messages (
+                id         INT AUTO_INCREMENT PRIMARY KEY,
+                session_id INT          NOT NULL,
+                user_id    INT          NOT NULL,
+                body       TEXT         NOT NULL,
+                created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
             )
